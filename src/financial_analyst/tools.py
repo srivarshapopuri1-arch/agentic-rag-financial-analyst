@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 import operator
-from typing import Callable
+from collections.abc import Callable
 
 from langchain_core.tools import tool
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -13,7 +13,7 @@ def load_pdf(path: Path) -> list[Document]:
         raise ValueError(f"Expected an existing PDF file: {path}")
 
     documents: list[Document] = []
-    with fitz.open(path) as pdf:
+    with pymupdf.open(path) as pdf:
         for page_number, page in enumerate(pdf, start=1):
             text = page.get_text("text").strip()
             if text:

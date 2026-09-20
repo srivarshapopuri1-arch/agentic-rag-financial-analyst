@@ -4,20 +4,18 @@ import hashlib
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
+from langchain_ollama import OllamaEmbeddings
 
 from .config import Settings
 
 
 def build_vector_store(settings: Settings) -> Chroma:
-    """Create a persistent Chroma store backed by OpenAI embeddings."""
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is required for embeddings.")
-
-    embeddings = OpenAIEmbeddings(
+    """Create a persistent Chroma store backed by local Ollama embeddings."""
+    embeddings = OllamaEmbeddings(
         model=settings.embedding_model,
-        api_key=settings.openai_api_key,
+        base_url=settings.ollama_base_url,
     )
+
     return Chroma(
         collection_name=settings.collection_name,
         embedding_function=embeddings,
@@ -31,6 +29,7 @@ def index_documents(store: Chroma, documents: list[Document]) -> int:
         return 0
 
     ids: list[str] = []
+
     for document in documents:
         raw = (
             f"{document.metadata.get('source')}|{document.metadata.get('page')}|"
@@ -43,4 +42,5 @@ def index_documents(store: Chroma, documents: list[Document]) -> int:
 
 
 def retrieve(store: Chroma, query: str, top_k: int = 6) -> list[Document]:
+    """Retrieve the most relevant document chunks for a query."""
     return store.similarity_search(query, k=top_k)
