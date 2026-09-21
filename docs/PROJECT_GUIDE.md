@@ -1,185 +1,193 @@
-# Project Guide
+# How the Project Works
 
-This note explains the project in plain language and records the Git workflow used to keep the repository tidy. The README is the main setup reference; this guide focuses on understanding what happens after a PDF is added and why the repository is organized the way it is.
+I built this project to understand how retrieval and agent workflows can make long financial reports easier to work with. The main idea is to keep the answer tied to the report instead of relying on the model's general knowledge.
 
-## The project in simple terms
+## Document processing
 
-The application lets me put public financial-report PDFs into a local folder and ask questions about them.
+I start with public financial reports such as 10-Ks, 10-Qs, and annual reports. PyMuPDF reads the text one page at a time and keeps the filename and page number with the extracted text.
 
-Instead of asking the language model to answer from general knowledge, the application first searches the reports for passages related to the question. Those passages become the evidence for the answer. The model is told to use only that evidence and to cite the document and page it used.
+Financial reports can be long, so I split each page into smaller overlapping chunks. Keeping some overlap helps avoid losing context when an important sentence falls near a chunk boundary.
 
-For questions that require arithmetic, the model can use a small calculator tool. The calculator handles the math, while the financial values still need to come from the retrieved document evidence.
-
-At the end, the application checks the citation markers. If the answer cannot be supported by the retrieved evidence, it should return an insufficient-evidence response rather than fill in missing information.
-
-## What happens when documents are indexed
-
-1. **Read the PDFs.** PyMuPDF extracts text from each non-empty page and keeps the PDF filename and page number.
-2. **Split the text.** Long pages are divided into overlapping chunks so retrieval can work with smaller pieces of text. The source and page metadata stay attached.
-3. **Create embeddings.** Ollama runs the local `nomic-embed-text` model to turn each chunk into a numeric representation of its meaning.
-4. **Store the chunks.** Chroma saves the embeddings and text locally. Deterministic chunk IDs help avoid creating duplicate copies when the same content is indexed again.
-
-The PDFs and local Chroma database are intentionally ignored by Git.
-
-## What happens when a question is asked
-
-The LangGraph workflow is:
+Each chunk keeps its source information:
 
 ```text
-question
-   |
-   v
-retrieve relevant chunks from Chroma
-   |
-   v
-analyze only the retrieved evidence
-   |
-   +---- arithmetic needed? ---- yes ---> calculator
-   |                                  |
-   |                                  +----> analysis continues
-   v
-generate final answer
-   |
-   v
-validate citation markers
-   |
-   v
-cited answer OR insufficient evidence
+document name
+page number
+chunk id
+text
 ```
 
-### Retrieval
+## Embeddings and storage
 
-The question is embedded and Chroma returns the most similar chunks. By default, the application asks for the top six chunks.
+I use `nomic-embed-text` through Ollama to create an embedding for each chunk. An embedding represents the meaning of the text as numbers, which makes it possible to search for passages that are related to a question even when the wording is different.
 
-Retrieval is important because these chunks define what the model is allowed to use. If an important passage is not retrieved, the model is instructed not to invent the missing information.
+The chunks and embeddings are stored locally in Chroma.
 
-### Analysis and tool use
+When I index the same content again, the project creates deterministic IDs from the document information and text. This helps avoid adding duplicate copies of identical chunks.
 
-The local Llama model receives the question and retrieved evidence. LangGraph coordinates this step.
+## Asking a question
 
-If the model decides arithmetic is needed, it can call the calculator. The calculator accepts only basic numeric arithmetic. It does not run arbitrary Python code, imports, names, or function calls.
+When I enter a question in the Streamlit interface, the project searches Chroma for the most relevant chunks. The default configuration retrieves six chunks.
 
-After a calculator call, the result goes back into the analysis flow before the final response is written.
+Those retrieved chunks become the evidence for the rest of the workflow. The model is instructed to use that evidence instead of filling gaps from memory.
 
-### Final answer and validation
+The flow looks like this:
 
-The final answer is generated from the original question, retrieved evidence, and any calculator result. Financial claims are expected to use citation markers such as:
+```text
+Financial reports
+       |
+       v
+Extract text and page information
+       |
+       v
+Split text into chunks
+       |
+       v
+Create embeddings with Ollama
+       |
+       v
+Store chunks in Chroma
+       |
+       v
+Ask a question
+       |
+       v
+Retrieve relevant chunks
+       |
+       v
+Analyze retrieved evidence
+       |
+       +------ calculation needed ------> calculator
+       |                                     |
+       |<------------------------------------+
+       v
+Create final answer
+       |
+       v
+Check citations
+       |
+       v
+Answer with sources or insufficient evidence
+```
+
+## LangGraph workflow
+
+LangGraph connects the different parts of the question-answering process.
+
+### Document research
+
+The first step searches Chroma using the question and collects the relevant passages. If nothing useful is available, the workflow can stop with an insufficient-evidence response.
+
+### Financial analysis
+
+The retrieved passages are sent to the local Llama model. The prompt tells the model to use only the supplied evidence and to avoid inventing figures, periods, companies, or conclusions.
+
+### Calculator
+
+Some financial questions need arithmetic, such as percentage changes between two reported values. For those questions, the model can call the calculator.
+
+I kept the calculator restricted to basic numeric arithmetic. It does not allow arbitrary Python execution, imports, function calls, names, or attributes.
+
+The calculator only handles the calculation. The numbers used in the calculation still need to come from the financial report.
+
+### Final answer
+
+After the analysis and any calculation, the model creates the final response using the original question, retrieved passages, and calculator result.
+
+A citation looks like:
 
 ```text
 [report.pdf p. 42]
 ```
 
-The validator checks that citations are present and that the cited source/page markers belong to the evidence retrieved for that question. This is a useful guardrail, but it does not prove that every sentence is semantically supported by the cited passage.
+This makes it possible to go back to the original page and check the information.
+
+### Citation validation
+
+The last step checks whether the answer contains citations and whether those source/page markers were actually part of the retrieved evidence.
+
+If the answer refers to evidence that was not retrieved, the validation fails. If the available documents do not support the answer, the workflow returns an insufficient-evidence response.
+
+This check helps prevent unsupported source references, but it does not prove that every sentence is completely supported by the cited passage.
+
+## Streamlit interface
+
+The Streamlit app gives me two main actions.
+
+**Index documents** reads the PDFs from the `data/` directory, splits them into chunks, creates embeddings, and stores them in Chroma.
+
+**Analyze** takes a question, runs the LangGraph workflow, and displays the answer. I can also open the retrieved-evidence section to see the passages that were supplied to the model.
 
 ## Main files
 
-- `app.py` — Streamlit interface for indexing documents and asking questions.
-- `src/financial_analyst/ingestion.py` — PDF reading and text chunking.
-- `src/financial_analyst/vectorstore.py` — Ollama embeddings, Chroma storage, indexing, and retrieval.
-- `src/financial_analyst/graph.py` — LangGraph workflow connecting retrieval, analysis, calculator use, finalization, and validation.
-- `src/financial_analyst/agents.py` — local LLM setup, evidence formatting, and citation validation.
-- `src/financial_analyst/tools.py` — restricted calculator.
-- `src/financial_analyst/config.py` — settings loaded from environment variables.
-- `src/financial_analyst/logging_config.py` — logging setup.
-- `tests/` — offline tests for ingestion, calculator behavior, and citation validation.
-- `.env.example` — example local configuration without secrets.
-- `.gitignore` — keeps local data, model indexes, environments, caches, logs, and secrets out of Git.
+`app.py` contains the Streamlit interface.
 
-## Running the project
+`src/financial_analyst/ingestion.py` reads PDFs and splits their text into chunks while preserving source and page information.
 
-After following the installation steps in the README, put public financial PDFs in `data/`, make sure Ollama is running, and start:
+`src/financial_analyst/vectorstore.py` creates Ollama embeddings, stores document chunks in Chroma, and retrieves relevant passages.
+
+`src/financial_analyst/graph.py` defines the LangGraph flow for retrieval, analysis, calculator calls, final answer generation, and validation.
+
+`src/financial_analyst/agents.py` creates the local Llama model, formats retrieved evidence, and validates citation markers.
+
+`src/financial_analyst/tools.py` contains the restricted calculator.
+
+`src/financial_analyst/config.py` loads the project settings.
+
+`src/financial_analyst/logging_config.py` configures logging.
+
+`tests/` contains tests for document chunking, calculator restrictions, citations, and insufficient-evidence behavior.
+
+## Running it
+
+After installing the dependencies and the Ollama models described in the README, I place public financial PDFs in:
+
+```text
+data/
+```
+
+Then I start the application with:
 
 ```bash
 streamlit run app.py
 ```
 
-Use **Index documents** before asking questions. Indexing builds or updates the local Chroma collection.
+I index the documents from the sidebar before asking questions.
 
-The two default Ollama models are:
+The default local models are:
 
 ```text
 llama3.2:3b
 nomic-embed-text
 ```
 
-The first generates and reasons over answers. The second creates embeddings for retrieval.
+`llama3.2:3b` handles the analysis and response generation. `nomic-embed-text` creates the embeddings used for document retrieval.
 
-## Checking changes
+## Testing
 
-The normal code checks are:
+The automated checks are:
 
 ```bash
 pytest
 ruff check .
 ```
 
-The tests are intentionally offline. They do not require a running Ollama server or a committed financial PDF.
+The tests cover the parts of the project that can be checked without running a local model, including chunk metadata, chunk settings, arithmetic restrictions, citation validation, and insufficient-evidence handling.
 
-A live check is separate: run Ollama and Streamlit, index a public report, then try a supported question, a calculation question, and a question whose answer is not in the document.
+I also check the complete flow locally with Ollama and Streamlit by indexing a public report and trying questions that require direct retrieval, a calculation, and information that is not available in the document.
 
-## Git workflow used for this repository
+## Data and local files
 
-The repository now uses `main` as the single long-lived branch. Short-lived branches can still be useful when making a change, but completed work should be reviewed and merged back into `main`.
+The financial PDFs and Chroma database stay local. Environment files, virtual environments, caches, logs, generated package files, and local document data are excluded from the repository.
 
-A simple workflow for a future change is:
+I use public or appropriately licensed reports and avoid putting credentials, confidential documents, or private financial information in the project.
 
-```bash
-git checkout main
-git pull origin main
-git checkout -b short-description
-```
+## Limitations
 
-Make the change, run the checks, then inspect what changed:
+The current PDF extraction works best when the report contains extractable text. Scanned reports would need OCR, which I have not added.
 
-```bash
-git status
-git diff
-pytest
-ruff check .
-```
+Complex financial tables can lose their original structure when they are extracted as plain text. Retrieval is based on similarity, so it can also miss a relevant passage.
 
-Commit and push the branch:
+The citation validator checks that a citation came from the retrieved evidence, but it does not perform a full semantic verification of every claim.
 
-```bash
-git add .
-git commit -m "Describe the change"
-git push -u origin short-description
-```
-
-After the branch is reviewed and merged on GitHub, update the local copy:
-
-```bash
-git checkout main
-git pull origin main
-```
-
-When the merged branch no longer contains unique work, remove it locally and remotely:
-
-```bash
-git branch -d short-description
-git push origin --delete short-description
-git fetch --prune
-```
-
-Before deleting a branch, compare or review it first. The important rule is that unique work should be merged or intentionally preserved before the branch is removed.
-
-## What Git should not contain
-
-Local runtime material does not belong in the repository. The current `.gitignore` excludes items such as:
-
-- `.env` files other than the safe example
-- local PDFs in `data/`
-- the Chroma database
-- virtual environments
-- Python, pytest, Ruff, mypy, and notebook caches
-- logs and coverage output
-- editor/OS metadata
-- generated package metadata
-
-API keys, credentials, confidential reports, and private financial information should never be committed.
-
-## Current boundaries
-
-This project works with text that PyMuPDF can extract from PDFs. It does not implement OCR for scanned reports or table-aware financial-statement parsing. Retrieval is similarity based, so relevant passages can occasionally be missed. The citation check verifies that cited markers came from retrieved evidence; it is not a complete factual-entailment system.
-
-Those limits are intentional for now. The project stays small enough that the RAG flow, agent/tool behavior, and grounding checks can be understood directly from the code.
+For now, I have kept those limitations visible instead of adding more layers to the project. The current structure gives me a clear way to experiment with retrieval, tool use, citations, and local language models while still being able to follow the complete flow in the code.
