@@ -60,6 +60,8 @@ The workflow stays deliberately small. Retrieval establishes the evidence availa
 
 The validation step does **not** prove that every sentence is factually entailed by its citation. It is a guardrail around source use, not a complete hallucination detector.
 
+For a plain-language walkthrough of the RAG flow and the Git workflow used for this repository, see [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md).
+
 ## Repository structure
 
 ```text
