@@ -1,71 +1,64 @@
 # Agentic RAG Financial Analyst
 
-A local-first financial research assistant that combines retrieval-augmented generation (RAG), LangGraph orchestration, tool calling, financial analysis, source citations, and grounding validation.
+I built this project to explore a question I kept coming back to: how useful can RAG and simple AI-agent workflows be when reading long financial reports?
 
-The application analyzes public financial-report PDFs using local models through Ollama, allowing the core workflow to run without paid LLM API credits.
+The project is a small local-first research assistant for public financial documents such as 10-Ks, 10-Qs, and annual reports. It parses PDFs, retrieves relevant passages, lets an LLM reason over that evidence, can call a restricted calculator, and checks that final answers cite retrieved source pages. The goal is not to automate financial judgment, but to make document exploration easier while keeping the evidence visible.
 
-## Features
+> This is an experimental document-analysis project, not investment advice.
 
-- Ingests public 10-K, 10-Q, annual-report, and other financial PDFs.
-- Extracts page-level text with PyMuPDF while preserving source and page metadata.
-- Chunks documents and generates local embeddings with `nomic-embed-text`.
-- Stores and retrieves financial evidence using persistent Chroma vector search.
-- Uses `llama3.2:3b` locally through Ollama for financial-document analysis.
-- Orchestrates retrieval, analysis, calculator tool calling, final-answer generation, and validation with LangGraph.
-- Includes a restricted arithmetic calculator for verifiable financial calculations.
-- Requires source/page citations for grounded financial claims.
-- Rejects citations that do not belong to the retrieved evidence set.
-- Returns an explicit insufficient-evidence response when a grounded answer cannot be produced.
-- Provides a Streamlit interface, configuration management, logging, and offline unit tests.
-- Runs locally without requiring an OpenAI API key.
+## What it does
 
-> This project is for research and portfolio demonstration only. It is not investment advice.
+- Reads public financial-report PDFs with PyMuPDF.
+- Preserves source and page metadata during chunking.
+- Creates local embeddings with `nomic-embed-text` through Ollama.
+- Stores and retrieves chunks with Chroma.
+- Uses `llama3.2:3b` locally for document-grounded analysis.
+- Coordinates retrieval, analysis, calculator tool calls, final answer generation, and validation with LangGraph.
+- Includes a restricted arithmetic calculator for financial calculations.
+- Requires source/page citations for grounded answers.
+- Rejects citations that are outside the retrieved evidence set.
+- Returns an explicit insufficient-evidence response when it cannot support an answer.
+- Provides a simple Streamlit interface.
+- Includes configuration, logging, error handling, tests, and secret-safe defaults.
 
-## Architecture
+## How it works
 
 ```text
-Public financial PDFs
-        |
-        v
-PyMuPDF ingestion
-        |
-        v
-Chunking + source/page metadata
-        |
-        v
+Financial PDFs
+      |
+      v
+PyMuPDF parsing
+      |
+      v
+Page-aware chunking
+      |
+      v
 nomic-embed-text (Ollama)
-        |
-        v
-Persistent Chroma vector store
-        |
-        v
-User financial question
-        |
-        v
-LangGraph workflow
-        |
-        +--> Document research
-        |
-        +--> Financial analysis (Llama 3.2)
-        |
-        +--> Calculator tool when arithmetic is required
-        |          |
-        |          +----> Financial analysis
-        |
-        +--> Final grounded answer
-        |
-        +--> Citation validation
-        |
-        v
-Cited answer / insufficient evidence
-        |
-        v
-Streamlit UI
+      |
+      v
+Chroma vector store
+      |
+      v
+User question
+      |
+      v
+LangGraph
+  |-- document research / retrieval
+  |-- financial analysis
+  |-- calculator tool when needed
+  |-- final answer generation
+  `-- citation validation
+      |
+      v
+Cited answer or insufficient evidence
+      |
+      v
+Streamlit
 ```
 
-The workflow is intentionally compact enough for an individual portfolio project while demonstrating an end-to-end agentic RAG architecture.
+The workflow stays deliberately small. Retrieval establishes the evidence available to the model. The analysis step is instructed to use only that evidence. If arithmetic is needed, the model can call the calculator tool and then continue reasoning with the result. A final generation step produces the response, and deterministic validation checks whether its citation markers belong to the retrieved evidence.
 
-Retrieval establishes the evidence set. The financial-analysis agent is instructed to use only retrieved evidence. When arithmetic is required, the model can call a restricted calculator through LangGraph. The final response is then checked against the retrieved citation markers before being displayed.
+The validation step does **not** prove that every sentence is factually entailed by its citation. It is a guardrail around source use, not a complete hallucination detector.
 
 ## Repository structure
 
@@ -95,31 +88,15 @@ Retrieval establishes the evidence set. The financial-analysis agent is instruct
 
 ## Tech stack
 
-- Python 3.11+
-- Streamlit
-- LangChain
-- LangGraph
-- Ollama
-- Llama 3.2
-- nomic-embed-text
-- Chroma
-- PyMuPDF
-- Pydantic
-- Pytest
-- Ruff
+Python 3.11+, LangChain, LangGraph, Ollama, Llama 3.2, nomic-embed-text, Chroma, PyMuPDF, Streamlit, Pydantic, Pytest, and Ruff.
 
 ## Setup
 
-### 1. Clone the repository
+Clone the repository and create a virtual environment:
 
 ```bash
 git clone https://github.com/srivarshapopuri1-arch/agentic-rag-financial-analyst.git
 cd agentic-rag-financial-analyst
-```
-
-### 2. Create a virtual environment
-
-```bash
 python -m venv .venv
 ```
 
@@ -135,52 +112,33 @@ On macOS/Linux:
 source .venv/bin/activate
 ```
 
-### 3. Install dependencies
+Install the project and development dependencies:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-### 4. Install Ollama
-
-Install Ollama from its official distribution for your operating system.
-
-Verify the installation:
-
-```bash
-ollama --version
-```
-
-### 5. Download the local models
+Install Ollama, then download the two local models used by the default configuration:
 
 ```bash
 ollama pull llama3.2:3b
 ollama pull nomic-embed-text
-```
-
-Verify them:
-
-```bash
 ollama list
 ```
 
-### 6. Configure the application
-
-Copy `.env.example` to `.env`.
-
-Windows PowerShell:
+Copy the example configuration:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-macOS/Linux:
+On macOS/Linux:
 
 ```bash
 cp .env.example .env
 ```
 
-Default configuration:
+The default settings are:
 
 ```text
 LLM_MODEL=llama3.2:3b
@@ -199,41 +157,27 @@ LOG_LEVEL=INFO
 
 No OpenAI API key is required.
 
-## Financial documents
+## Add financial documents
 
-Place legitimate public financial-report PDFs in:
+Place public financial-report PDFs in:
 
 ```text
 data/
 ```
 
-PDFs are deliberately ignored by Git.
-
-Appropriate inputs include public annual reports, 10-Ks, 10-Qs, and other regulatory filings that you are permitted to use.
-
-Do not add confidential employer/customer documents, credentials, or private financial information.
+PDFs in this directory are ignored by Git. Do not add confidential documents, credentials, private financial information, or other material that should not be public.
 
 ## Run
 
-Make sure Ollama is running, then start the application:
+Make sure Ollama is running, then start Streamlit:
 
 ```bash
 streamlit run app.py
 ```
 
-Open the Streamlit interface and select **Index documents**.
+In the sidebar, select **Index documents**. The application parses the PDFs, chunks the text, creates embeddings, and stores the chunks in Chroma. After indexing, ask questions in the main interface.
 
-The application will:
-
-1. Parse the PDFs.
-2. Split them into chunks.
-3. Generate local embeddings.
-4. Store the chunks in Chroma.
-5. Make the indexed evidence available to the LangGraph workflow.
-
-Then ask financial questions through the Streamlit interface.
-
-Example questions:
+## Example questions
 
 ```text
 What total revenue did the company report for the latest fiscal year? Cite the source.
@@ -251,155 +195,87 @@ What liquidity risks does management describe?
 Extract operating income and explain the reported year-over-year change.
 ```
 
-Arithmetic questions can invoke the calculator tool when appropriate.
-
-## Agentic workflow
-
-### 1. Document research
-
-The research step retrieves the most relevant chunks from Chroma using the user's question.
-
-### 2. Financial analysis
-
-The local Llama model analyzes the retrieved evidence and is instructed not to introduce unsupported outside facts.
-
-### 3. Calculator tool
-
-When arithmetic is required, the model can call a restricted calculator through the LangGraph workflow.
-
-The calculator supports numeric arithmetic while rejecting names, function calls, imports, attributes, and other executable Python behavior.
-
-### 4. Final answer generation
-
-After analysis and any tool calls, the workflow constructs a final answer using the original question, retrieved evidence, and relevant tool results.
-
-### 5. Grounding validation
-
-A deterministic validation step checks that citations are present when required and that cited source/page markers belong to the retrieved evidence set.
-
-If grounding fails, the application does not silently present the generated response as supported.
-
-## Grounding behavior
-
-The application is designed around three response cases:
-
-**Supported question**
-
-Returns an answer with source/page citations from retrieved evidence.
-
-**Calculation question**
-
-Can combine retrieved financial evidence with the calculator tool and return the calculation with documentary citations.
-
-**Unsupported question**
-
-Returns an explicit insufficient-evidence response rather than intentionally fabricating support.
-
-Grounding validation improves reliability, but it does not prove that every interpretation or factual statement is semantically correct. Material conclusions should still be checked against the original filing.
-
-## Configuration
-
-`.env.example` contains the supported settings:
-
-- `LLM_MODEL`
-- `EMBEDDING_MODEL`
-- `OLLAMA_BASE_URL`
-- `CHROMA_DIR`
-- `COLLECTION_NAME`
-- `DATA_DIR`
-- `CHUNK_SIZE`
-- `CHUNK_OVERLAP`
-- `TOP_K`
-- `LOG_LEVEL`
-
-The default configuration uses:
-
 ```text
-LLM_MODEL=llama3.2:3b
-EMBEDDING_MODEL=nomic-embed-text
+Calculate the percentage change between two reported revenue figures and cite the source values.
 ```
 
-## Tests and code quality
+The quality of an answer depends on whether the relevant passages are present in the indexed documents and retrieved for the question.
 
-Run the automated tests:
+## Agents and tools
+
+### Document research
+
+The first LangGraph node retrieves the most relevant Chroma chunks for the question. Those chunks form the evidence set used by the rest of the workflow.
+
+### Financial analysis
+
+The analysis node uses the local Llama model and is instructed to reason only from retrieved evidence. It can request the calculator when arithmetic is required.
+
+### Calculator
+
+The calculator evaluates a deliberately small subset of numeric arithmetic. It rejects names, imports, function calls, attributes, and other executable Python behavior.
+
+### Final answer
+
+After analysis and any calculator calls, the graph asks the model for a concise final response using the original question, retrieved evidence, and tool results.
+
+### Validation
+
+A deterministic validation step checks citation presence and verifies that cited source/page markers occur in the retrieved evidence. If that check fails, the application does not present the generated text as a grounded answer.
+
+## Tests
+
+Run:
 
 ```bash
 pytest
-```
-
-Run static checks:
-
-```bash
 ruff check .
 ```
 
-The offline tests cover:
+The current tests cover chunk metadata, chunk configuration validation, arithmetic, rejection of unsafe calculator expressions, citation validation, and insufficient-evidence behavior.
 
-- document chunk metadata
-- chunk configuration validation
-- arithmetic calculations
-- rejection of unsafe calculator expressions
-- citation validation
-- insufficient-evidence behavior
+The live Ollama/Chroma/Streamlit path is separate from the offline unit tests because it requires local models and a running Ollama service.
 
-The live Ollama, embedding, Chroma, and Streamlit workflow requires the local Ollama service and downloaded models and is therefore separate from the offline unit tests.
+## Experiments
 
-## Verified local workflow
+While building the project, I used a public sample financial filing locally to exercise three behaviors rather than treating generated text alone as a successful test:
 
-During local development, the application was successfully exercised through the following workflow:
+1. A question whose answer was present in the filing, to check retrieval and page citation behavior.
+2. A percentage-change question, to check that arithmetic could go through the calculator while the source figures remained tied to document evidence.
+3. A question asking for information not supported by the indexed filing, to check the insufficient-evidence path.
 
-```text
-PDF
- -> PyMuPDF
- -> document chunks
- -> nomic-embed-text
- -> Chroma
- -> LangGraph
- -> Llama 3.2
- -> calculator tool when required
- -> grounded final response
- -> citation validation
- -> Streamlit
-```
+These checks were used to debug the workflow itself. The sample PDF and its financial values are intentionally not committed, so this repository does not claim those local figures as reproducible results.
 
-Local testing verified document indexing, retrieval-based financial answering, source/page citations, arithmetic analysis through the agent workflow, and insufficient-evidence handling.
+## Observations
+
+A few things became clear during the experiment:
+
+- Page metadata is useful because it makes retrieved evidence easier to inspect than a citation to a document name alone.
+- Tool use and source grounding are different concerns. A calculator can verify arithmetic, but the numeric inputs still need documentary support.
+- Deterministic citation checks are useful as a final guardrail, but they cannot determine whether a sentence truly follows from the cited passage.
+- Smaller local models make the project inexpensive to run, but complex financial reasoning can be less consistent and local inference speed depends heavily on hardware.
+- Retrieval quality matters as much as generation quality. If the relevant passage is not retrieved, the model should not fill the gap from memory.
+
+These are implementation observations from working on this project, not financial conclusions or benchmark claims.
 
 ## Limitations
 
-- Image-only and scanned PDFs require OCR, which is not implemented.
-- Complex financial tables can lose structure during plain PDF text extraction.
-- Vector retrieval can miss relevant passages.
-- Citation validation verifies source-marker usage; it is not a full semantic-entailment or hallucination detector.
-- Cross-company and cross-period comparisons are only as complete as the indexed filings and retrieved evidence.
-- Local inference speed depends on the user's CPU, GPU, RAM, and selected Ollama model.
-- Smaller local models may be less reliable than larger models on complex financial reasoning.
+- Scanned or image-only PDFs require OCR, which is not implemented.
+- Complex tables can lose structure during plain PDF text extraction.
+- Similarity search can miss relevant passages.
+- The current workflow does not perform table-aware extraction or normalized financial-statement modeling.
+- Citation validation checks citation markers, not semantic entailment.
+- Cross-company and cross-period comparisons are only as complete as the indexed documents and retrieved evidence.
+- Smaller local models may be inconsistent on difficult reasoning tasks.
 - Ollama must be installed and running locally.
-- This is a portfolio research assistant, not a production financial-data or investment-advice platform.
+- The project is for document exploration and experimentation, not financial advice.
 
-## Possible extensions
+## Ideas to explore next
 
-Potential future improvements include:
+Possible extensions include SEC EDGAR ingestion, table-aware parsing, retrieval reranking, structured metric extraction, evaluation datasets, semantic grounding checks, tracing, and a small API layer.
 
-- SEC EDGAR API ingestion
-- table-aware financial-document parsing
-- retrieval reranking
-- structured KPI extraction
-- RAG evaluation datasets
-- semantic grounding evaluation
-- tracing and observability
-- configurable local models
-- FastAPI service layer
-
-## Responsible use
+## Data and secrets
 
 Use public or appropriately licensed documents only.
 
-Never commit:
-
-- `.env`
-- credentials or API keys
-- private financial information
-- confidential company documents
-- local vector-database files
-
-Always verify material financial conclusions against the original source filing.
+The repository ignores local PDFs, the Chroma database, `.env`, virtual environments, logs, and generated package metadata. Never commit API keys, credentials, confidential documents, or private financial information.
