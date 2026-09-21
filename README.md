@@ -21,6 +21,15 @@ The project is a small local-first research assistant for public financial docum
 - Provides a simple Streamlit interface.
 - Includes configuration, logging, error handling, tests, and secret-safe defaults.
 
+## Technologies Used
+
+**Language:** Python  
+**RAG & orchestration:** RAG, LangChain, LangGraph  
+**Local models:** Ollama, Llama 3.2, `nomic-embed-text`  
+**Vector store & document processing:** Chroma, PyMuPDF  
+**Interface & configuration:** Streamlit, Pydantic  
+**Testing & quality:** Pytest, Ruff
+
 ## How it works
 
 ```text
