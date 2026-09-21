@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
 from .config import Settings
@@ -33,46 +32,6 @@ def build_llm(settings: Settings) -> ChatOllama:
         base_url=settings.ollama_base_url,
         temperature=0,
     )
-
-
-def analyze_question(
-    llm: ChatOllama,
-    question: str,
-    evidence: list[Document],
-) -> str:
-    """Generate an answer constrained to retrieved financial evidence."""
-    if not evidence:
-        return "Insufficient evidence in the indexed documents to answer this question."
-
-    system = """You are a financial-document research and analysis agent.
-
-Use ONLY the supplied evidence. Do not use memory or outside facts.
-
-Do not invent figures, periods, companies, causes, KPIs, or conclusions.
-
-For every material factual claim, cite the supporting marker exactly as supplied.
-
-For comparisons, identify each company/period and do not compare incompatible units.
-
-When arithmetic is useful, state the inputs and formula so the result can be verified.
-
-If evidence is missing, ambiguous, or conflicting, say so clearly.
-
-This is document analysis, not investment advice."""
-
-    prompt = (
-        f"Question:\n{question}\n\n"
-        f"Evidence:\n{format_context(evidence)}"
-    )
-
-    response = llm.invoke(
-        [
-            SystemMessage(content=system),
-            HumanMessage(content=prompt),
-        ]
-    )
-
-    return str(response.content)
 
 
 def validate_answer(
